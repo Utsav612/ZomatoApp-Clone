@@ -27,7 +27,7 @@ jobs:
         run: |
           docker build -t zomato .
           docker tag zomato utsav612/zomato:latest
-          echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "utsav612" --password-stdin
+          echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "utsav@123" --password-stdin
           docker push utsav612/zomato:latest
       - name: trivy image scan
         run: trivy image utsav612/zomato:latest
