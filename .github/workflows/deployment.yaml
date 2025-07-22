@@ -1,4 +1,5 @@
 name: build analyze, scan deploy
+
 on:
   push:
     branches:
@@ -9,37 +10,59 @@ jobs:
     name: build
     runs-on: [self-hosted]
     steps:
-      - name: checkout the code
+      - name: Checkout the code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Building code and analyze with SonarQube
-        uses: actions/checkout@main
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: SonarQube Scan
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-      - name: dependencies install
         run: |
-          npm install
-      - name: trivyScan
+          npm run build
+          npx sonar-scanner \
+            -Dsonar.projectKey=zomato \
+            -Dsonar.sources=. \
+            -Dsonar.host.url=$SONAR_HOST_URL \
+            -Dsonar.login=$SONAR_TOKEN
+
+      - name: Trivy Filesystem Scan
         run: trivy fs . > trivy-report.txt
-      - name: docker build push
+
+      - name: Upload Trivy Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-fs-report
+          path: trivy-report.txt
+
+      - name: Docker Build and Push
         run: |
           docker build -t zomato .
           docker tag zomato utsav612/zomato:latest
           echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "utsav612" --password-stdin
           docker push utsav612/zomato:latest
-      - name: trivy image scan
+
+      - name: Trivy Image Scan
         run: trivy image utsav612/zomato:latest
-        
+
   deploy:
     name: deploy app to docker
     needs: build-analyze-scan
     runs-on: [self-hosted]
     steps:
-      - name: docker pull
+      - name: Docker Pull
         run: docker pull utsav612/zomato:latest
-      - name: trivy scan
+
+      - name: Trivy Scan Again (Optional)
         run: trivy image utsav612/zomato:latest
-      - name: docker run application
+
+      - name: Remove existing container
+        run: docker rm -f zomato || true
+
+      - name: Docker Run Application
         run: docker run -itd -p 3000:3000 --name zomato utsav612/zomato:latest
+
