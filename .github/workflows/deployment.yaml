@@ -1,5 +1,4 @@
 name: build analyze, scan deploy
-
 on:
   push:
     branches:
@@ -9,49 +8,38 @@ jobs:
   build-analyze-scan:
     name: build
     runs-on: [self-hosted]
-
     steps:
-      - name: Checkout the code
+      - name: checkout the code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      - name: SonarQube Scan
-        uses: SonarSource/sonarqube-scan-action@master
+      - name: Building code and analyze with SonarQube
+        uses: actions/checkout@main
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-
-      - name: Install dependencies
-        run: npm install
-
-      - name: Trivy Filesystem Scan
+      - name: dependencies install
+        run: |
+          npm install
+      - name: trivyScan
         run: trivy fs . > trivy-report.txt
-
-      - name: Docker Build & Push
+      - name: docker build push
         run: |
           docker build -t zomato .
           docker tag zomato utsav612/zomato:latest
-          echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+          echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "utsav612" --password-stdin
           docker push utsav612/zomato:latest
-
-      - name: Trivy Docker Image Scan
+      - name: trivy image scan
         run: trivy image utsav612/zomato:latest
-
+        
   deploy:
     name: deploy app to docker
     needs: build-analyze-scan
     runs-on: [self-hosted]
-
     steps:
-      - name: Pull Docker Image
+      - name: docker pull
         run: docker pull utsav612/zomato:latest
-
-      - name: Trivy Image Scan (Post-deploy)
+      - name: trivy scan
         run: trivy image utsav612/zomato:latest
-
-      - name: Run Container
-        run: |
-          docker stop zomato || true
-          docker rm zomato || true
-          docker run -itd -p 3000:3000 --name zomato utsav612/zomato:latest
+      - name: docker run application
+        run: docker run -itd -p 3000:3000 --name zomato utsav612/zomato:latest
